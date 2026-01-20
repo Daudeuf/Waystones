@@ -16,4 +16,5 @@ public class ModItemTags {
     public static final TagKey<Item> WAYSTONES = TagKey.create(Registries.ITEM, new ResourceLocation(Waystones.MOD_ID, "waystones"));
     public static final TagKey<Item> SHARESTONES = TagKey.create(Registries.ITEM, new ResourceLocation(Waystones.MOD_ID, "sharestones"));
     public static final TagKey<Item> DYED_SHARESTONES = TagKey.create(Registries.ITEM, new ResourceLocation(Waystones.MOD_ID, "dyed_sharestones"));
+    public static final TagKey<Item> TRANSPORT_DENIED = TagKey.create(Registries.ITEM, new ResourceLocation(Waystones.MOD_ID, "transport_denied"));
 }

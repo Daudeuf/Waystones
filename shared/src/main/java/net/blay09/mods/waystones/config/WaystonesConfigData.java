@@ -11,6 +11,7 @@ import java.util.List;
 @Config(Waystones.MOD_ID)
 public class WaystonesConfigData implements BalmConfigData {
     public XpCost xpCost = new XpCost();
+    public ItemLimit itemLimit = new ItemLimit();
     public Restrictions restrictions = new Restrictions();
     public Cooldowns cooldowns = new Cooldowns();
     public InventoryButton inventoryButton = new InventoryButton();
@@ -72,6 +73,24 @@ public class WaystonesConfigData implements BalmConfigData {
         public double inventoryButtonXpCostMultiplier = 0f;
     }
 
+    public static class ItemLimit {
+        @Synced
+        @Comment("Set to true if item limit should be used, meaning the player have a max amount of stack for each item.")
+        public boolean useItemLimit = true;
+
+        @Synced
+        @Comment("The maximum stack count without cost. (eg. 128 planks => 2 stacks of planks, allowed)")
+        public int allowedStackCount = 2;
+
+        @Synced
+        @Comment("The count of item that be consumed if allowed stack amount is exceeded.")
+        public int costCount = 3;
+
+        @Synced
+        @Comment("The item that is consumed when teleporting")
+        public String costItem = "minecraft:diamond";
+    }
+
     public static class Restrictions {
         @Synced
         @Comment("If enabled, only creative players can place, edit or break waystones. This does NOT disable the crafting recipe.")
@@ -88,6 +107,10 @@ public class WaystonesConfigData implements BalmConfigData {
         @Synced
         @Comment("If enabled, leashed mobs will be teleported with you")
         public boolean transportLeashed = true;
+
+        @Synced
+        @Comment("If enabled, leashed mobs will be teleported with you")
+        public boolean warpPlateTransportOnlyPlayer = false;
 
         @Synced
         @Comment("Whether to take leashed mobs with you when teleporting between dimensions")

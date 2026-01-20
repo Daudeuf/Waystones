@@ -73,6 +73,18 @@ public class WaystoneTeleportError {
         }
     }
 
+    public static class ItemWarpDenied extends WaystoneTeleportError {
+        public ItemWarpDenied() {
+            super("chat.waystones.cannot_transport_denied_item");
+        }
+    }
+
+    public static class ItemWarpDeniedCarry extends WaystoneTeleportError {
+        public ItemWarpDeniedCarry() {
+            super("chat.waystones.cannot_transport_carry_item");
+        }
+    }
+
     public static class LeashedWarpDenied extends WaystoneTeleportError {
         public LeashedWarpDenied() {
             super("chat.waystones.cannot_transport_leashed");

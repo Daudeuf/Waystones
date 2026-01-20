@@ -16,6 +16,13 @@ plugins {
     id "com.modrinth.minotaur" version "2.+"
 }
 
+repositories {
+    maven {
+        name = "Illusive Soulworks maven"
+        url = "https://maven.theillusivec4.top/"
+    }
+}
+
 apply plugin: "org.spongepowered.mixin"
 
 group = mod_group
@@ -171,9 +178,18 @@ dependencies {
         runtimeOnly fg.deobf("mezz.jei:jei-$jei_minecraft_version-forge:$jei_version")
     }
 
+    implementation fg.deobf("curse.maven:sophisticated-core-618298:6158122")
+    implementation fg.deobf("curse.maven:sophisticated-backpacks-422301:6157676")
+    implementation fg.deobf("curse.maven:sophisticated-storage-619320:6157664")
+
     compileOnly fg.deobf("curse.maven:jade-324717:$jade_forge_version")
     compileOnly fg.deobf("mcp.mobius.waila:wthit-api:forge-$wthit_version")
     compileOnly fg.deobf("curse.maven:the-one-probe-245211:$theoneprobe_version")
+
+    // Compile against only the API artifact
+    compileOnly(fg.deobf("top.theillusivec4.curios:curios-forge:5.11.1+1.20.1:api"))
+    // Use the full Curios API jar at runtime
+    runtimeOnly(fg.deobf("top.theillusivec4.curios:curios-forge:5.11.1+1.20.1"))
 }
 
 apply from: 'dependencies.gradle'

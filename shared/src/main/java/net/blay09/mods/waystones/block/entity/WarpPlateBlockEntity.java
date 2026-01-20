@@ -208,14 +208,16 @@ public class WarpPlateBlockEntity extends WaystoneBlockEntityBase implements Imp
     }
 
     public void onEntityCollision(Entity entity) {
-        Integer ticksPassed = ticksPassedPerEntity.putIfAbsent(entity, 0);
-        if (ticksPassed == null || ticksPassed != -1) {
-            final var status = getTargetWaystone().filter(IWaystone::isValid)
-                    .map(it -> WarpPlateBlock.WarpPlateStatus.ACTIVE)
-                    .orElse(WarpPlateBlock.WarpPlateStatus.INVALID);
-            level.setBlock(worldPosition, getBlockState()
-                    .setValue(WarpPlateBlock.ACTIVE, true)
-                    .setValue(WarpPlateBlock.STATUS, status), 3);
+        if (!WaystonesConfig.getActive().restrictions.warpPlateTransportOnlyPlayer || entity instanceof Player) {
+            Integer ticksPassed = ticksPassedPerEntity.putIfAbsent(entity, 0);
+            if (ticksPassed == null || ticksPassed != -1) {
+                final var status = getTargetWaystone().filter(IWaystone::isValid)
+                        .map(it -> WarpPlateBlock.WarpPlateStatus.ACTIVE)
+                        .orElse(WarpPlateBlock.WarpPlateStatus.INVALID);
+                level.setBlock(worldPosition, getBlockState()
+                        .setValue(WarpPlateBlock.ACTIVE, true)
+                        .setValue(WarpPlateBlock.STATUS, status), 3);
+            }
         }
     }
 

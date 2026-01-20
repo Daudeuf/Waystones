@@ -31,5 +31,9 @@ public class ForgeWaystones {
                 logger.error("Failed to load Repurposed Structures integration", e);
             }
         }
+
+        Balm.initializeIfLoaded(Compat.SOPHISTICATED_BACKPACK, "net.blay09.mods.waystones.compat.SophisticatedBackpacksIntegration");
+        Balm.initializeIfLoaded(Compat.SOPHISTICATED_STORAGE, "net.blay09.mods.waystones.compat.SophisticatedStoragesIntegration");
+        Balm.initializeIfLoaded("curios", "net.blay09.mods.waystones.compat.CuriosIntegration");
     }
 }

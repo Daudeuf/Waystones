@@ -5,6 +5,8 @@ import net.blay09.mods.balm.api.Balm;
 import net.blay09.mods.balm.api.BalmEnvironment;
 import net.blay09.mods.waystones.api.*;
 import net.blay09.mods.waystones.block.entity.WarpPlateBlockEntity;
+import net.blay09.mods.waystones.compat.ISophisticated;
+import net.blay09.mods.waystones.compat.ICurios;
 import net.blay09.mods.waystones.config.DimensionalWarp;
 import net.blay09.mods.waystones.config.InventoryButtonMode;
 import net.blay09.mods.waystones.config.WaystonesConfig;
@@ -16,6 +18,9 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSetExperiencePacket;
 import net.minecraft.resources.ResourceLocation;
@@ -27,10 +32,13 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.tags.TagKey;
 import net.minecraft.util.Mth;
+import net.minecraft.world.Container;
+import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.PathfinderMob;
+import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
@@ -44,10 +52,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
+import java.util.*;
 import java.util.function.Consumer;
 
 public class PlayerWaystoneManager {
@@ -56,6 +61,10 @@ public class PlayerWaystoneManager {
 
     private static final IPlayerWaystoneData persistentPlayerWaystoneData = new PersistentPlayerWaystoneData();
     private static final IPlayerWaystoneData inMemoryPlayerWaystoneData = new InMemoryPlayerWaystoneData();
+
+    private static ISophisticated sophisticatedBackpacksIntegration;
+    private static ISophisticated sophisticatedStoragesIntegration;
+    private static ICurios curiosIntegration;
 
     public static boolean mayBreakWaystone(Player player, BlockGetter world, BlockPos pos) {
         if (WaystonesConfig.getActive().restrictions.restrictToCreative && !player.getAbilities().instabuild) {
@@ -263,6 +272,15 @@ public class PlayerWaystoneManager {
         }
 
         boolean isCreativeMode = entity instanceof Player && ((Player) entity).getAbilities().instabuild;
+
+        if (entity instanceof Player && isTeleportationDenied((Player) entity) && !isCreativeMode) {
+            return Either.right(new WaystoneTeleportError.ItemWarpDenied());
+        }
+
+        if (entity instanceof Player && cannotTeleportCarryItem((Player) entity) && !isCreativeMode) {
+            return Either.right(new WaystoneTeleportError.ItemWarpDeniedCarry());
+        }
+
         if (!context.getWarpItem().isEmpty() && event.getConsumeItemResult().withDefault(() -> !isCreativeMode && context.consumesWarpItem())) {
             context.getWarpItem().shrink(1);
         }
@@ -270,6 +288,7 @@ public class PlayerWaystoneManager {
         if (entity instanceof Player player) {
             applyCooldown(warpMode, player, context.getCooldown());
             applyXpCost(player, context.getXpCost());
+            applyLargeItemTransferPayment(player);
         }
 
         final var teleportedEntities = doTeleport(context);
@@ -301,6 +320,27 @@ public class PlayerWaystoneManager {
                 case WARP_STONE -> getPlayerWaystoneData(level).setWarpStoneCooldownUntil(player, System.currentTimeMillis() + cooldown * 1000L);
             }
             WaystoneSyncManager.sendWaystoneCooldowns(player);
+        }
+    }
+
+    private static void applyLargeItemTransferPayment(Player player) {
+        if (!checkItemLimitInInventory(player)) {
+            Item      item = BuiltInRegistries.ITEM.get(new ResourceLocation(WaystonesConfig.getActive().itemLimit.costItem));
+            Inventory inv  = player.getInventory();
+
+            int remaining = WaystonesConfig.getActive().itemLimit.costCount;
+
+            for (int i = 0; i < inv.getContainerSize(); i++) {
+                ItemStack s = inv.getItem(i);
+
+                if (s.is(item)) {
+                    int c = Math.min(remaining, s.getCount());
+                    s.shrink(c);
+                    remaining -= c;
+
+                    if (s.getCount() == 0) inv.setItem(i, ItemStack.EMPTY);
+                }
+            }
         }
     }
 
@@ -557,7 +597,7 @@ public class PlayerWaystoneManager {
     }
 
     public static boolean mayTeleportToWaystone(Player player, IWaystone waystone) {
-        return true;
+        return true; // TODO : do nothing ?
     }
 
     public static void swapWaystoneSorting(Player player, int index, int otherIndex) {
@@ -593,4 +633,144 @@ public class PlayerWaystoneManager {
         }
     }
 
+    public static boolean canPayLimitedTeleportation(Player player) {
+        Item item = BuiltInRegistries.ITEM.get(new ResourceLocation(WaystonesConfig.getActive().itemLimit.costItem));
+        if (item == null) return false;
+
+        return player.getInventory().countItem(item) >= WaystonesConfig.getActive().itemLimit.costCount;
+    }
+
+    public static boolean isTeleportationDenied(Player player) {
+        HashMap<Item, Integer> map = flatContainer(invToContainer(player));
+
+        for (Item item : map.keySet()) {
+            if (item.getDefaultInstance().is(ModItemTags.TRANSPORT_DENIED)) return true;
+        }
+
+        return false;
+    }
+
+    public static boolean cannotTeleportCarryItem(Player player) {
+        boolean canCarry = checkItemLimitInInventory(player);
+        boolean canPay = canPayLimitedTeleportation(player);
+
+        return !canCarry && !canPay;
+    }
+
+    public static boolean checkItemLimitInInventory(Player player) {
+        if (!WaystonesConfig.getActive().itemLimit.useItemLimit) return true;
+        int maxStackCount = WaystonesConfig.getActive().itemLimit.allowedStackCount;
+
+        HashMap<Item, Integer> map = flatContainer(invToContainer(player));
+
+        for (Item item : map.keySet()) {
+            if (map.get(item) > item.getMaxStackSize() * maxStackCount) return false;
+        }
+
+        return true;
+    }
+
+    private static HashMap<Item, Integer> flatContainer(Container container) {
+        HashMap<Item, Integer> map = new HashMap<>();
+
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            ItemStack stack = container.getItem(i);
+
+            if (map.containsKey(stack.getItem())) map.put(stack.getItem(), map.get(stack.getItem()) + stack.getCount());
+            else map.put(stack.getItem(), stack.getCount());
+
+            CompoundTag tag = stack.getTag();
+
+            if (tag != null) {
+                Container cont = getNestedInventory(tag, stack.getItem());
+                if (cont != null) {
+                    HashMap<Item, Integer> temp_map = flatContainer(cont);
+
+                    for (Item item : temp_map.keySet()) {
+                        if (map.containsKey(item)) map.put(item, map.get(item) + temp_map.get(item));
+                        else map.put(item, temp_map.get(item));
+                    }
+                }
+            }
+        }
+
+        return map;
+    }
+
+    private static Container invToContainer(Player player) {
+        Inventory inventory = player.getInventory();
+        Container curiosContainer = null;
+        if (curiosIntegration != null) curiosContainer = curiosIntegration.getContainerForCuriosInv(player);
+        Container c = new SimpleContainer(inventory.getContainerSize() + (curiosContainer != null ? curiosContainer.getContainerSize() : 0));
+
+        int count = 0;
+        for (ItemStack s : inventory.items) c.setItem(count++, s);
+        for (ItemStack s : inventory.armor) c.setItem(count++, s);
+        for (ItemStack s : inventory.offhand) c.setItem(count++, s);
+
+        if (curiosContainer != null) {
+            for (int i = 0; i < curiosContainer.getContainerSize(); i++) {
+                c.setItem(count++, curiosContainer.getItem(i));
+            }
+        }
+
+        return c;
+    }
+
+    private static Container getNestedInventory(CompoundTag tag, Item parent) {
+        String namespace = BuiltInRegistries.ITEM.getKey(parent).getNamespace();
+
+        if (namespace.equals("sophisticatedbackpacks") && sophisticatedBackpacksIntegration != null) {
+            for (String key : tag.getAllKeys()) {
+                if (key.equals("contentsUuid")) {
+                    UUID uuid = tag.getUUID("contentsUuid");
+                    Container c = sophisticatedBackpacksIntegration.getContainerWithUUID(uuid);
+                    if (c != null) return c;
+                }
+            }
+        } else if (namespace.equals("sophisticatedstorage") && sophisticatedStoragesIntegration != null) {
+            for (String key : tag.getAllKeys()) {
+                if (key.equals("uuid")) {
+                    UUID uuid = tag.getUUID("uuid");
+                    Container c = sophisticatedStoragesIntegration.getContainerWithUUID(uuid);
+                    if (c != null) return c;
+                }
+            }
+        } else {
+            for (String key : tag.getAllKeys()) {
+                if (key.equals("Items")) {
+                    return getNestedInventory(tag.getList("Items", Tag.TAG_COMPOUND));
+                } else if (tag.getTagType(key) == Tag.TAG_COMPOUND) {
+                    Container c = getNestedInventory(tag.getCompound(key), parent);
+                    if (c != null) return c;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static Container getNestedInventory(ListTag itemsTag) {
+        Container container = new SimpleContainer(itemsTag.size());
+
+        for (int i = 0; i < itemsTag.size(); i++) {
+            CompoundTag itemTag = itemsTag.getCompound(i);
+            ItemStack stack = ItemStack.of(itemTag);
+            container.setItem(i, stack);
+        }
+
+        return container;
+    }
+
+    public static void setSophisticatedBackpacksIntegration(ISophisticated i) {
+        sophisticatedBackpacksIntegration = i;
+    }
+
+    public static void setSophisticatedStoragesIntegration(ISophisticated i) {
+        sophisticatedStoragesIntegration = i;
+    }
+
+    public static void setCuriosIntegration(ICurios i) {
+        curiosIntegration = i;
+    }
 }
