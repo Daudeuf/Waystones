@@ -1,1 +1,1 @@
-- Fixed desert village waystones and waterlogged waystone structures all being considered the same waystone
+- Fixed unnamed sharestones being created when placing a new one on Forge

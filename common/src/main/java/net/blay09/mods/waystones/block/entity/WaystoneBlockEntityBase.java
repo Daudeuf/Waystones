@@ -71,10 +71,7 @@ public abstract class WaystoneBlockEntityBase extends BalmBlockEntity implements
 
     @Override
     public void onLoad() {
-        IWaystone backingWaystone = waystone;
-        if (waystone instanceof WaystoneProxy) {
-            backingWaystone = ((WaystoneProxy) waystone).getBackingWaystone();
-        }
+        final var backingWaystone = loadBackingWaystone();
         if (backingWaystone instanceof Waystone && level != null) {
             ((Waystone) backingWaystone).setDimension(level.dimension());
             ((Waystone) backingWaystone).setPos(worldPosition);
@@ -87,7 +84,7 @@ public abstract class WaystoneBlockEntityBase extends BalmBlockEntity implements
         return new AABB(worldPosition.getX(), worldPosition.getY(), worldPosition.getZ(), worldPosition.getX() + 1, worldPosition.getY() + 2, worldPosition.getZ() + 1);
     }
 
-    public IWaystone getWaystone() {
+    private IWaystone loadBackingWaystone() {
         if (!waystone.isValid() && level != null && !level.isClientSide && !shouldNotInitialize) {
             if (waystoneUid != null) {
                 waystone = new WaystoneProxy(level.getServer(), waystoneUid);
@@ -111,21 +108,27 @@ public abstract class WaystoneBlockEntityBase extends BalmBlockEntity implements
 
             if (waystone.isValid()) {
                 waystoneUid = waystone.getWaystoneUid();
-                sync();
+                setChanged();
             }
         }
 
         return waystone;
     }
 
+    public IWaystone getWaystone() {
+        return waystone;
+    }
+
     protected abstract ResourceLocation getWaystoneType();
 
     public void initializeWaystone(ServerLevelAccessor world, @Nullable LivingEntity player, WaystoneOrigin origin) {
-        Waystone waystone = new Waystone(getWaystoneType(), UUID.randomUUID(), world.getLevel().dimension(), worldPosition, origin, player != null ? player.getUUID() : null);
-        WaystoneManager.get(world.getServer()).addWaystone(waystone);
-        this.waystone = waystone;
-        setChanged();
-        sync();
+        if (!this.waystone.isValid()) {
+            Waystone waystone = new Waystone(getWaystoneType(), UUID.randomUUID(), world.getLevel().dimension(), worldPosition, origin, player != null ? player.getUUID() : null);
+            WaystoneManager.get(world.getServer()).addWaystone(waystone);
+            this.waystone = waystone;
+            setChanged();
+            sync();
+        }
     }
 
     public void initializeFromExisting(ServerLevelAccessor world, Waystone existingWaystone, ItemStack itemStack) {
@@ -137,7 +140,7 @@ public abstract class WaystoneBlockEntityBase extends BalmBlockEntity implements
     }
 
     public void initializeFromBase(WaystoneBlockEntityBase tileEntity) {
-        waystone = tileEntity.getWaystone();
+        waystone = tileEntity.loadBackingWaystone();
         setChanged();
         sync();
     }
